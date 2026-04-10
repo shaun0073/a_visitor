@@ -17,6 +17,13 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
+  <!-- 右上角 QR Code -->
+  <div style="position:fixed;top:16px;right:16px;text-align:center;z-index:1000;">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://a-visitor.vercel.app/visitor"
+         style="width:90px;height:90px;background:white;padding:6px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+    <div style="font-size:10px;font-weight:900;color:#64748b;margin-top:4px;background:rgba(255,255,255,0.9);padding:2px 8px;border-radius:6px;">掃描登記</div>
+  </div>
+
   <div class="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 relative overflow-hidden">
 
     <!-- 表單 -->
