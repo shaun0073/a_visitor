@@ -1,0 +1,140 @@
+/**
+ * 櫃台管理系統 - 伺服器端 (合併優化版)
+ * 結構定義：A:訪客證號, B:姓名, C:公司, D:受訪人, E:目的, F:電話, G:狀態, H:登記時間, I:簽退時間
+ * 特點：移除系統 ID (J欄)，支援自動置中對齊，多頁面路由
+ */
+const SPREADSHEET_ID = "1U0pf9dKhtXUFA4rpGY_D7ZKqeNY4eg-cKpywyW_YcJ0";
+const SHEET_NAME = "資料庫";
+
+/**
+ * 網頁進入點：根據 URL 參數決定顯示訪客頁面或管理頁面
+ * 訪客頁面：https://.../exec
+ * 櫃檯頁面：https://.../exec?page=admin
+ */
+function doGet(e) {
+  let page = e.parameter.page || 'index';
+  try {
+    const html = HtmlService.createTemplateFromFile(page);
+    html.scriptUrl = ScriptApp.getService().getUrl();
+    return html.evaluate()
+      .setTitle(page === 'admin' ? '櫃檯管理系統' : '訪客登記系統')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } catch (err) {
+    return HtmlService.createHtmlOutput("頁面不存在或載入錯誤。請確認檔案名稱(index/admin)是否正確。");
+  }
+}
+
+/**
+ * 【櫃檯管理端】抓取雲端資料 (9 欄位版)
+ * 限制讀取最近 200 筆，並反向排列（最新在前）
+ */
+function getCloudRecords() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+    
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return []; 
+
+    const maxFetch = 200; 
+    const startRow = Math.max(2, lastRow - maxFetch + 1);
+    const numRows = lastRow - startRow + 1;
+
+    // 抓取 A 到 I 欄 (共 9 欄)
+    const range = sheet.getRange(startRow, 1, numRows, 9);
+    const displayValues = range.getDisplayValues(); 
+
+    const results = [];
+    for (let i = displayValues.length - 1; i >= 0; i--) {
+      // 檢查 A 欄(訪客證號) 是否有值
+      if (!displayValues[i][0]) continue;
+
+      results.push({
+        visitorId: String(displayValues[i][0]).trim(),   // A: 訪客證號
+        name: displayValues[i][1],        // B: 姓名
+        company: displayValues[i][2],     // C: 公司
+        host: displayValues[i][3],        // D: 受訪人
+        purpose: displayValues[i][4],     // E: 目的
+        phone: displayValues[i][5],       // F: 電話
+        status: String(displayValues[i][6]).trim(),      // G: 狀態
+        checkInTime: displayValues[i][7]  // H: 登記時間
+      });
+    }
+    return results;
+  } catch (e) { 
+    console.error("讀取失敗: " + e.toString());
+    return []; 
+  }
+}
+
+/**
+ * 【櫃檯管理端】核准訪客
+ */
+function approveVisitor(visitorId) {
+  return updateStatus(visitorId, "未簽退", false);
+}
+
+/**
+ * 【櫃檯管理端】簽退訪客
+ */
+function checkoutVisitor(visitorId) {
+  return updateStatus(visitorId, "已簽退", true);
+}
+
+/**
+ * 核心狀態更新函數 (訪客證號搜尋)
+ * 加入自動置中功能，更新 G 欄狀態與 I 欄簽退時間
+ */
+function updateStatus(visitorId, newStatus, isCheckout) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+    
+    const lastRow = sheet.getLastRow();
+    const cleanId = String(visitorId).trim();
+    
+    // 在 A 欄 (訪客證號) 搜尋
+    const rangeA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
+    let targetRowNum = -1;
+    for (let i = rangeA.length - 1; i >= 1; i--) {
+      if (String(rangeA[i][0]).trim() === cleanId) {
+        targetRowNum = i + 1;
+        break;
+      }
+    }
+
+    if (targetRowNum !== -1) {
+      // 1. 更新 G 欄狀態 (第 7 欄)
+      sheet.getRange(targetRowNum, 7).setValue(newStatus);
+      
+      // 2. 設置該行資料自動置中對齊 (A-I 欄)
+      sheet.getRange(targetRowNum, 1, 1, 9).setHorizontalAlignment("center");
+      
+      // 3. 若為簽退，更新 I 欄 (第 9 欄)
+      if (isCheckout) {
+        const now = new Date();
+        const cell = sheet.getRange(targetRowNum, 9);
+        cell.setValue(now);
+        cell.setNumberFormat("yyyy/MM/dd HH:mm:ss");
+      }
+      
+      SpreadsheetApp.flush(); 
+      return { success: true };
+    }
+    return { success: false, error: "在資料庫中找不到匹配的證號: " + visitorId };
+  } catch (e) { 
+    return { success: false, error: "系統更新錯誤: " + e.toString() }; 
+  }
+}
+
+/**
+ * 舊版/相容性介面：根據新狀態調用對應函數
+ */
+function updateStatusCompat(id, newStatus) {
+  if (newStatus === "已簽退") {
+    return checkoutVisitor(id);
+  } else {
+    return approveVisitor(id);
+  }
+}
