@@ -27,10 +27,18 @@
       </div>
     </div>
 
-    <!-- 已確認 -->
-    <div>
-      <h2 class="text-lg font-black text-emerald-600 mb-3">✅ 已核准</h2>
+    <!-- 已核准（在場中） -->
+    <div class="mb-8">
+      <h2 class="text-lg font-black text-emerald-600 mb-3">✅ 在場中</h2>
       <div id="approved-list" class="space-y-3">
+        <p class="text-slate-400 text-sm">載入中...</p>
+      </div>
+    </div>
+
+    <!-- 已離場 -->
+    <div>
+      <h2 class="text-lg font-black text-slate-400 mb-3">🚪 已離場</h2>
+      <div id="checkout-list" class="space-y-3">
         <p class="text-slate-400 text-sm">載入中...</p>
       </div>
     </div>
@@ -42,13 +50,14 @@
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     function formatTime(ts) {
+      if (!ts) return '-';
       return new Date(ts).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     }
 
-    function visitorCard(v, showApprove) {
+    function pendingCard(v) {
       const id = 'V-' + String(v.id).padStart(6, '0');
       return `
-        <div class="bg-white rounded-2xl p-5 shadow border border-slate-100 flex items-center justify-between gap-4">
+        <div class="bg-white rounded-2xl p-5 shadow border border-amber-100 flex items-center justify-between gap-4">
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-1">
               <span class="font-mono text-xs text-slate-400">${id}</span>
@@ -58,10 +67,43 @@
             <div class="text-sm text-slate-500 mt-1">受訪：<b>${v.host}</b>　目的：${v.purpose}</div>
             <div class="text-sm text-slate-500">電話：${v.phone}</div>
           </div>
-          ${showApprove ? `
           <button onclick="approve(${v.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-5 py-3 rounded-xl whitespace-nowrap">
             核准入場
-          </button>` : `<span class="text-emerald-500 font-black text-sm">已核准</span>`}
+          </button>
+        </div>`;
+    }
+
+    function approvedCard(v) {
+      const id = 'V-' + String(v.id).padStart(6, '0');
+      return `
+        <div class="bg-white rounded-2xl p-5 shadow border border-emerald-100 flex items-center justify-between gap-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-mono text-xs text-slate-400">${id}</span>
+              <span class="text-xs text-slate-400">入場：${formatTime(v.created_at)}</span>
+            </div>
+            <div class="font-black text-slate-800 text-lg">${v.name} <span class="text-sm font-bold text-slate-400">${v.company}</span></div>
+            <div class="text-sm text-slate-500 mt-1">受訪：<b>${v.host}</b>　目的：${v.purpose}</div>
+            <div class="text-sm text-slate-500">電話：${v.phone}</div>
+          </div>
+          <button onclick="checkout(${v.id})" class="bg-slate-600 hover:bg-slate-700 text-white font-black px-5 py-3 rounded-xl whitespace-nowrap">
+            簽退離場
+          </button>
+        </div>`;
+    }
+
+    function checkoutCard(v) {
+      const id = 'V-' + String(v.id).padStart(6, '0');
+      return `
+        <div class="bg-white rounded-2xl p-4 shadow border border-slate-100 flex items-center justify-between gap-4 opacity-60">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-mono text-xs text-slate-400">${id}</span>
+            </div>
+            <div class="font-bold text-slate-600">${v.name} <span class="text-sm font-bold text-slate-400">${v.company}</span></div>
+            <div class="text-xs text-slate-400 mt-1">入場：${formatTime(v.created_at)}　離場：${formatTime(v.checkout_at)}</div>
+          </div>
+          <span class="text-slate-400 font-black text-sm">已離場</span>
         </div>`;
     }
 
@@ -69,15 +111,20 @@
       const { data } = await client.from('visitors').select('*').order('created_at', { ascending: false });
 
       const pending = data.filter(v => v.status === '待確認');
-      const approved = data.filter(v => v.status !== '待確認');
+      const approved = data.filter(v => v.status === '已核准' && !v.checkout_at);
+      const checkedout = data.filter(v => v.checkout_at);
 
       document.getElementById('pending-list').innerHTML = pending.length
-        ? pending.map(v => visitorCard(v, true)).join('')
+        ? pending.map(pendingCard).join('')
         : '<p class="text-slate-400 text-sm">目前沒有待確認的訪客</p>';
 
       document.getElementById('approved-list').innerHTML = approved.length
-        ? approved.map(v => visitorCard(v, false)).join('')
-        : '<p class="text-slate-400 text-sm">尚無已核准記錄</p>';
+        ? approved.map(approvedCard).join('')
+        : '<p class="text-slate-400 text-sm">目前沒有在場訪客</p>';
+
+      document.getElementById('checkout-list').innerHTML = checkedout.length
+        ? checkedout.map(checkoutCard).join('')
+        : '<p class="text-slate-400 text-sm">尚無離場記錄</p>';
     }
 
     async function approve(id) {
@@ -85,7 +132,11 @@
       loadVisitors();
     }
 
-    // 自動每5秒更新
+    async function checkout(id) {
+      await client.from('visitors').update({ checkout_at: new Date().toISOString() }).eq('id', id);
+      loadVisitors();
+    }
+
     loadVisitors();
     setInterval(loadVisitors, 5000);
   </script>
