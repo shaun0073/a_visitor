@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; }
+        .status-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: bold; }
+        .status-pending { background-color: #fef3c7; color: #92400e; }
+        .status-active { background-color: #dcfce7; color: #166534; }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- 標題區 -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800">櫃檯管理系統</h1>
+                <p class="text-slate-500 mt-1">即時監控目前在場訪客與審核管理</p>
+            </div>
+            <button onclick="refreshData()" class="flex items-center justify-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                重新整理資料
+            </button>
+        </div>
+
+        <!-- 載入狀態 -->
+        <div id="loading" class="flex flex-col items-center justify-center py-20">
+            <div class="loading-spinner mb-4"></div>
+            <p class="text-slate-500 font-medium">正在讀取雲端資料庫...</p>
+        </div>
+
+        <!-- 空狀態 -->
+        <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+            <div class="bg-slate-50 p-6 rounded-full mb-4 text-slate-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            </div>
+            <p class="text-slate-500 font-bold text-lg">目前沒有待處理的訪客</p>
+            <p class="text-slate-400 text-sm">當有新訪客登記時，會自動顯示在此處</p>
+        </div>
+
+        <!-- 表格容器 -->
+        <div id="table-container" class="hidden overflow-x-auto bg-white rounded-3xl shadow-xl border border-slate-100">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50/50 border-b border-slate-100 text-slate-400 text-xs uppercase tracking-wider">
+                        <th class="p-5 font-bold">訪客證號</th>
+                        <th class="p-5 font-bold">訪客 / 狀態</th>
+                        <th class="p-5 font-bold">公司 / 單位</th>
+                        <th class="p-5 font-bold">受訪人 / 目的</th>
+                        <th class="p-5 font-bold">登記時間</th>
+                        <th class="p-5 font-bold text-center">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="visitor-list" class="divide-y divide-slate-50">
+                    <!-- 資料將透過 JavaScript 插入 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // 初始化載入
+        window.onload = refreshData;
+
+        function refreshData() {
+            const list = document.getElementById('visitor-list');
+            const container = document.getElementById('table-container');
+            const loading = document.getElementById('loading');
+            const empty = document.getElementById('empty-state');
+
+            loading.classList.remove('hidden');
+            container.classList.add('hidden');
+            empty.classList.add('hidden');
+
+            google.script.run
+                .withSuccessHandler(renderTable)
+                .withFailureHandler(handleError)
+                .getCloudRecords(); 
+        }
+
+        function renderTable(records) {
+            const list = document.getElementById('visitor-list');
+            const container = document.getElementById('table-container');
+            const loading = document.getElementById('loading');
+            const empty = document.getElementById('empty-state');
+            
+            loading.classList.add('hidden');
+            
+            if (!records || !Array.isArray(records)) {
+                handleError("資料格式錯誤");
+                return;
+            }
+
+            list.innerHTML = '';
+
+            // 篩選：待確認 (待審核) 或 未簽退 (在場中)
+            const activeVisitors = records.filter(r => r.status === '待確認' || r.status === '未簽退');
+
+            if (activeVisitors.length === 0) {
+                empty.classList.remove('hidden');
+                container.classList.add('hidden');
+                return;
+            }
+
+            empty.classList.add('hidden');
+            container.classList.remove('hidden');
+            
+            activeVisitors.forEach(r => {
+                const isPending = (r.status === '待確認');
+                const statusClass = isPending ? 'status-pending' : 'status-active';
+                const statusText = isPending ? '待審核' : '在場中';
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-blue-50/30 transition-colors';
+                
+                const vId = r.visitorId || '無證號';
+                const name = r.name || '未填寫';
+                const phone = r.phone || '';
+                const company = r.company || '-';
+                const host = r.host || '-';
+                const purpose = r.purpose || '-';
+                const time = r.checkInTime || '-';
+
+                tr.innerHTML = `
+                    <td class="p-5 font-mono font-bold text-blue-600 text-xs">${vId}</td>
+                    <td class="p-5">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800">${name}</span>
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="text-xs text-slate-400 font-medium">${phone}</div>
+                    </td>
+                    <td class="p-5 text-slate-600 font-medium">${company}</td>
+                    <td class="p-5">
+                        <div class="font-bold text-slate-700">${host}</div>
+                        <div class="text-xs text-slate-400">${purpose}</div>
+                    </td>
+                    <td class="p-5 text-slate-500 font-medium text-xs">${time}</td>
+                    <td class="p-5 text-center">
+                        ${isPending ? 
+                            `<button onclick="approve('${vId}')" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 shadow-lg transition-all active:scale-95">核准進入</button>` : 
+                            `<button onclick="checkout('${vId}')" class="bg-slate-800 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-red-600 transition-all active:scale-95">簽退</button>`
+                        }
+                    </td>
+                `;
+                list.appendChild(tr);
+            });
+        }
+
+        function approve(id) {
+            if(!id || id === '無證號') return;
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerText = '處理中...';
+            
+            google.script.run
+                .withSuccessHandler(() => {
+                    refreshData();
+                })
+                .withFailureHandler((err) => {
+                    alert('核准失敗：' + err);
+                    refreshData();
+                })
+                .approveVisitor(id); 
+        }
+
+        function checkout(id) {
+            if(!id || id === '無證號') return;
+            if(!confirm('確定要將此訪客簽退嗎？')) return;
+            
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerText = '處理中...';
+
+            google.script.run
+                .withSuccessHandler(() => {
+                    refreshData();
+                })
+                .withFailureHandler((err) => {
+                    alert('簽退失敗：' + err);
+                    refreshData();
+                })
+                .checkoutVisitor(id); 
+        }
+
+        function handleError(error) {
+            console.error(error);
+            document.getElementById('loading').innerHTML = `
+                <div class="text-red-500 font-bold">發生錯誤</div>
+                <div class="text-slate-500 text-sm mt-2">${error}</div>
+                <button onclick="refreshData()" class="mt-4 text-blue-600 underline">重試</button>
+            `;
+        }
+    </script>
+</body>
+</html>
