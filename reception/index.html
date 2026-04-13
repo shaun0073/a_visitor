@@ -185,7 +185,7 @@
     async function cardCheckout() {
       const card_number = document.getElementById('card-input').value.trim();
       if (!card_number) return;
-      const res = await fetch('/api/checkout', {
+      await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ card_number })
@@ -199,9 +199,14 @@
       loadVisitors();
     }
 
-    // 刷卡輸入框按 Enter 自動簽退
+    // 刷卡簽退輸入框按 Enter 自動簽退
     document.getElementById('card-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') cardCheckout();
+    });
+
+    // 核准彈窗刷卡後自動送出
+    document.getElementById('modal-card').addEventListener('keydown', e => {
+      if (e.key === 'Enter') confirmApprove();
     });
 
     loadVisitors();
