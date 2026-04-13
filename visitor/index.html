@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>訪客登記系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; }
@@ -17,7 +16,6 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-  <!-- 右上角 QR Code -->
   <div style="position:fixed;top:16px;right:16px;text-align:center;z-index:1000;">
     <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://a-visitor.vercel.app/visitor"
          style="width:90px;height:90px;background:white;padding:6px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
@@ -26,7 +24,6 @@
 
   <div class="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 relative overflow-hidden">
 
-    <!-- 表單 -->
     <div id="step-form">
       <div class="text-center mb-8">
         <div class="inline-block p-4 bg-blue-50 rounded-2xl mb-4">
@@ -62,7 +59,6 @@
       </div>
     </div>
 
-    <!-- 審核中 -->
     <div id="step-pending" class="hidden text-center py-6">
       <div class="relative w-20 h-20 mx-auto mb-6">
         <div class="absolute inset-0 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -75,7 +71,6 @@
       </div>
     </div>
 
-    <!-- 成功 -->
     <div id="step-success" class="hidden text-center py-4">
       <svg class="success-checkmark mb-4" viewBox="0 0 52 52">
         <circle cx="26" cy="26" r="25" fill="none" stroke="#10b981" stroke-width="3"/>
@@ -89,17 +84,12 @@
       <button onclick="location.reload()" class="w-full bg-slate-800 text-white font-black py-4 rounded-2xl">完成</button>
     </div>
 
-    <!-- Loading -->
     <div id="loading" class="hidden absolute inset-0 bg-white/90 z-50 flex items-center justify-center">
       <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
     </div>
   </div>
 
   <script>
-    const SUPABASE_URL = "https://diqvsjmlsqgukuptohzh.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpcXZzam1sc3FndWt1cHRvaHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzI1MDksImV4cCI6MjA5MTM0ODUwOX0.0fVBmdnKUkdkevingScguHafHpcSmCcMOtZug5SgQjo";
-    const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
     let pollInterval = null;
 
     function toggleOther() {
@@ -113,41 +103,47 @@
       const company = document.getElementById('company').value.trim();
       const host = document.getElementById('host').value.trim();
       const purposeVal = document.getElementById('purpose').value;
-      const purpose = purposeVal === '其他' ? `其他：${document.getElementById('other-purpose').value}` : purposeVal;
+      const purpose = purposeVal === '其他'
+        ? `其他：${document.getElementById('other-purpose').value}`
+        : purposeVal;
 
       if (!name || !phone || !company || !host || !purpose) {
-        alert('請填寫所有欄位');
-        return;
+        alert('請填寫所有欄位'); return;
       }
 
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('submitBtn').disabled = true;
 
-      const { data, error } = await client.from('visitors').insert([
-        { name, phone, company, host, purpose, status: '待確認' }
-      ]).select();
+      const res = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone, company, host, purpose })
+      });
 
       document.getElementById('loading').classList.add('hidden');
 
-      if (error) {
-        alert('送出失敗：' + error.message);
+      if (!res.ok) {
+        alert('送出失敗');
         document.getElementById('submitBtn').disabled = false;
         return;
       }
 
-      const id = String(data[0].id).padStart(6, '0');
+      const { id } = await res.json();
+      const displayId = 'V-' + String(id).padStart(6, '0');
       document.getElementById('step-form').classList.add('hidden');
       document.getElementById('step-pending').classList.remove('hidden');
-      document.getElementById('visitor-id-display').innerText = 'V-' + id;
-      startPolling(data[0].id, 'V-' + id);
+      document.getElementById('visitor-id-display').innerText = displayId;
+      startPolling(id, displayId);
     }
 
     function startPolling(rowId, displayId) {
       pollInterval = setInterval(async () => {
-        const { data } = await client.from('visitors').select('status').eq('id', rowId).single();
-        if (data && data.status !== '待確認') {
+        const res = await fetch(`/api/status?id=${rowId}`);
+        const { status } = await res.json();
+        if (status !== '待確認') {
           clearInterval(pollInterval);
-          document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(displayId)}`;
+          document.getElementById('qr-image').src =
+            `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(displayId)}`;
           document.getElementById('success-id-display').innerText = displayId;
           document.getElementById('step-pending').classList.add('hidden');
           document.getElementById('step-success').classList.remove('hidden');
