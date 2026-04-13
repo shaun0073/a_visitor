@@ -97,6 +97,9 @@
             <div class="text-sm text-slate-500 mt-1">受訪：<b>${v.host}</b>　目的：${v.purpose}</div>
             <div class="text-sm text-slate-500">電話：${v.phone}</div>
           </div>
+          <button onclick="checkout(${v.id})" class="bg-slate-600 hover:bg-slate-700 text-white font-black px-5 py-3 rounded-xl whitespace-nowrap">
+            簽退離場
+          </button>
         </div>`;
     }
 
@@ -156,6 +159,15 @@
         msg.textContent = '❌ 目前沒有待確認的訪客';
       }
       setTimeout(() => msg.classList.add('hidden'), 3000);
+      loadVisitors();
+    }
+
+    async function checkout(id) {
+      await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
       loadVisitors();
     }
 
