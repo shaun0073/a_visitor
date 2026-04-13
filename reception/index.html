@@ -18,6 +18,17 @@
       <button onclick="loadVisitors()" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm">重新整理</button>
     </div>
 
+    <!-- 刷卡簽退區 -->
+    <div class="bg-white rounded-2xl p-5 shadow border border-blue-100 mb-8">
+      <h2 class="text-lg font-black text-blue-600 mb-3">🪪 刷卡簽退</h2>
+      <div class="flex gap-3">
+        <input type="text" id="card-input" class="flex-1 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-blue-400" placeholder="輸入或刷卡號...">
+        <button onclick="cardCheckout()" class="bg-slate-700 hover:bg-slate-800 text-white font-black px-6 py-3 rounded-xl">簽退</button>
+      </div>
+      <div id="card-msg" class="mt-2 text-sm font-bold hidden"></div>
+    </div>
+
+    <!-- 待確認 -->
     <div class="mb-8">
       <h2 class="text-lg font-black text-amber-600 mb-3">⏳ 待確認</h2>
       <div id="pending-list" class="space-y-3">
@@ -25,6 +36,7 @@
       </div>
     </div>
 
+    <!-- 在場中 -->
     <div class="mb-8">
       <h2 class="text-lg font-black text-emerald-600 mb-3">✅ 在場中</h2>
       <div id="approved-list" class="space-y-3">
@@ -32,6 +44,7 @@
       </div>
     </div>
 
+    <!-- 已離場 -->
     <div>
       <h2 class="text-lg font-black text-slate-400 mb-3">🚪 已離場</h2>
       <div id="checkout-list" class="space-y-3">
@@ -40,7 +53,21 @@
     </div>
   </div>
 
+  <!-- 核准彈窗 -->
+  <div id="approve-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl p-6 w-80 shadow-2xl">
+      <h3 class="text-lg font-black text-slate-800 mb-4">輸入訪客卡號</h3>
+      <input type="text" id="modal-card" class="w-full border-2 border-slate-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-blue-400 mb-4" placeholder="刷卡或輸入卡號...">
+      <div class="flex gap-3">
+        <button onclick="closeModal()" class="flex-1 bg-slate-100 text-slate-600 font-black py-3 rounded-xl">取消</button>
+        <button onclick="confirmApprove()" class="flex-1 bg-emerald-500 text-white font-black py-3 rounded-xl">核准</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    let pendingApproveId = null;
+
     function formatTime(ts) {
       if (!ts) return '-';
       return new Date(ts).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
@@ -59,7 +86,7 @@
             <div class="text-sm text-slate-500 mt-1">受訪：<b>${v.host}</b>　目的：${v.purpose}</div>
             <div class="text-sm text-slate-500">電話：${v.phone}</div>
           </div>
-          <button onclick="approve(${v.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-5 py-3 rounded-xl whitespace-nowrap">
+          <button onclick="openModal(${v.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-5 py-3 rounded-xl whitespace-nowrap">
             核准入場
           </button>
         </div>`;
@@ -73,6 +100,7 @@
             <div class="flex items-center gap-2 mb-1">
               <span class="font-mono text-xs text-slate-400">${id}</span>
               <span class="text-xs text-slate-400">入場：${formatTime(v.created_at)}</span>
+              ${v.card_number ? `<span class="bg-blue-100 text-blue-600 font-black text-xs px-2 py-0.5 rounded-lg">卡號：${v.card_number}</span>` : ''}
             </div>
             <div class="font-black text-slate-800 text-lg">${v.name} <span class="text-sm font-bold text-slate-400">${v.company}</span></div>
             <div class="text-sm text-slate-500 mt-1">受訪：<b>${v.host}</b>　目的：${v.purpose}</div>
@@ -91,6 +119,7 @@
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-1">
               <span class="font-mono text-xs text-slate-400">${id}</span>
+              ${v.card_number ? `<span class="text-xs text-slate-400">卡號：${v.card_number}</span>` : ''}
             </div>
             <div class="font-bold text-slate-600">${v.name} <span class="text-sm font-bold text-slate-400">${v.company}</span></div>
             <div class="text-xs text-slate-400 mt-1">入場：${formatTime(v.created_at)}　離場：${formatTime(v.checkout_at)}</div>
@@ -120,12 +149,27 @@
         : '<p class="text-slate-400 text-sm">尚無離場記錄</p>';
     }
 
-    async function approve(id) {
+    function openModal(id) {
+      pendingApproveId = id;
+      document.getElementById('modal-card').value = '';
+      document.getElementById('approve-modal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('modal-card').focus(), 100);
+    }
+
+    function closeModal() {
+      document.getElementById('approve-modal').classList.add('hidden');
+      pendingApproveId = null;
+    }
+
+    async function confirmApprove() {
+      const card_number = document.getElementById('modal-card').value.trim();
+      if (!card_number) { alert('請輸入卡號'); return; }
       await fetch('/api/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
+        body: JSON.stringify({ id: pendingApproveId, card_number })
       });
+      closeModal();
       loadVisitors();
     }
 
@@ -137,6 +181,28 @@
       });
       loadVisitors();
     }
+
+    async function cardCheckout() {
+      const card_number = document.getElementById('card-input').value.trim();
+      if (!card_number) return;
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_number })
+      });
+      document.getElementById('card-input').value = '';
+      const msg = document.getElementById('card-msg');
+      msg.classList.remove('hidden', 'text-red-500', 'text-emerald-600');
+      msg.classList.add('text-emerald-600');
+      msg.textContent = '✅ 簽退成功';
+      setTimeout(() => msg.classList.add('hidden'), 3000);
+      loadVisitors();
+    }
+
+    // 刷卡輸入框按 Enter 自動簽退
+    document.getElementById('card-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') cardCheckout();
+    });
 
     loadVisitors();
     setInterval(loadVisitors, 5000);
