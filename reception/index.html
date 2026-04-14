@@ -117,6 +117,14 @@
         </div>`;
     }
 
+    function toggleDate(id) {
+      const el = document.getElementById(id);
+      const idx = id.split('-')[1];
+      const arrow = document.getElementById('arrow-' + idx);
+      el.classList.toggle('hidden');
+      arrow.textContent = el.classList.contains('hidden') ? '▼' : '▲';
+    }
+
     async function loadVisitors() {
       const res = await fetch('/api/visitors');
       const data = await res.json();
@@ -140,9 +148,16 @@
           if (!grouped[date]) grouped[date] = [];
           grouped[date].push(v);
         });
-        document.getElementById('checkout-list').innerHTML = Object.keys(grouped).map(date => `
-          <div class="text-xs font-black text-slate-400 mt-4 mb-2">${date}</div>
-          ${grouped[date].map(checkoutCard).join('')}
+        document.getElementById('checkout-list').innerHTML = Object.keys(grouped).map((date, i) => `
+          <div class="bg-white rounded-2xl shadow border border-slate-100 overflow-hidden mb-3">
+            <button onclick="toggleDate('date-${i}')" class="w-full flex items-center justify-between px-5 py-4 font-black text-slate-600 hover:bg-slate-50">
+              <span>📅 ${date}　<span class="text-slate-400 font-bold text-sm">${grouped[date].length} 筆</span></span>
+              <span id="arrow-${i}" class="text-slate-400 text-sm">▼</span>
+            </button>
+            <div id="date-${i}" class="hidden px-4 pb-4 space-y-3">
+              ${grouped[date].map(checkoutCard).join('')}
+            </div>
+          </div>
         `).join('');
       } else {
         document.getElementById('checkout-list').innerHTML = '<p class="text-slate-400 text-sm">尚無離場記錄</p>';
