@@ -133,9 +133,20 @@
         ? approved.map(approvedCard).join('')
         : '<p class="text-slate-400 text-sm">目前沒有在場訪客</p>';
 
-      document.getElementById('checkout-list').innerHTML = checkedout.length
-        ? checkedout.map(checkoutCard).join('')
-        : '<p class="text-slate-400 text-sm">尚無離場記錄</p>';
+      if (checkedout.length) {
+        const grouped = {};
+        checkedout.forEach(v => {
+          const date = new Date(v.checkout_at).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
+          if (!grouped[date]) grouped[date] = [];
+          grouped[date].push(v);
+        });
+        document.getElementById('checkout-list').innerHTML = Object.keys(grouped).map(date => `
+          <div class="text-xs font-black text-slate-400 mt-4 mb-2">${date}</div>
+          ${grouped[date].map(checkoutCard).join('')}
+        `).join('');
+      } else {
+        document.getElementById('checkout-list').innerHTML = '<p class="text-slate-400 text-sm">尚無離場記錄</p>';
+      }
     }
 
     async function assignCard() {
