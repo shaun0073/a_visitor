@@ -91,7 +91,6 @@
             <div class="flex items-center gap-2 mb-1">
               <span class="font-mono text-xs text-slate-400">${id}</span>
               <span class="text-xs text-slate-400">入場：${formatTime(v.created_at)}</span>
-              ${v.card_number ? `<span class="bg-blue-100 text-blue-600 font-black text-xs px-2 py-0.5 rounded-lg">卡號：${v.card_number}</span>` : ''}
             </div>
             <div class="font-black text-slate-800 text-lg">${v.name} <span class="text-sm font-bold text-slate-400">${v.company}</span></div>
             <div class="text-sm text-slate-500 mt-1">受訪：<b>${v.host}</b>　目的：${v.purpose}</div>
@@ -110,7 +109,6 @@
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-1">
               <span class="font-mono text-xs text-slate-400">${id}</span>
-              ${v.card_number ? `<span class="text-xs text-slate-400">卡號：${v.card_number}</span>` : ''}
             </div>
             <div class="font-bold text-slate-600">${v.name} <span class="text-sm font-bold text-slate-400">${v.company}</span></div>
             <div class="text-xs text-slate-400 mt-1">入場：${formatTime(v.created_at)}　離場：${formatTime(v.checkout_at)}</div>
